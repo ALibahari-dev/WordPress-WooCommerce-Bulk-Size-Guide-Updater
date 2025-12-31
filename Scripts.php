@@ -173,8 +173,6 @@ function run_update_products_with_report() {
 اندازه آستین: ۳۲ سانتی‌متر | دور سینه: ۲۲ سانتی‌متر<br>
 <small>امکان خطای ۱ تا ۲ سانتی‌متری وجود دارد.</small>
 ' , 
-// ... ادامه موارد قبلی ...
-
         'snoopy-size-25.webp' => '
         &nbsp;
 <strong>راهنمای سایزبندی ست اسنوپی (سایز ۲۵)</strong><br>
@@ -345,106 +343,108 @@ function run_update_products_with_report() {
 
     $duration = round(microtime(true) - $start_time, 2);
     ?>
-<!DOCTYPE html>
-<html lang="fa">
-<head>
-<meta charset="UTF-8">
-<title>گزارش بروزرسانی</title>
+ <!DOCTYPE html>
+ <html lang="fa">
 
-<style>
-@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-font-face.css');
+ <head>
+     <meta charset="UTF-8">
+     <title>گزارش بروزرسانی</title>
 
-* {
-    font-family: Vazirmatn, Tahoma, sans-serif;
-}
+     <style>
+     @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-font-face.css');
 
-body {
-    background:#f4f6f8;
-    direction:rtl;
-    padding:40px;
-}
+     * {
+         font-family: Vazirmatn, Tahoma, sans-serif;
+     }
 
-.box {
-    max-width:900px;
-    margin:auto;
-    background:#fff;
-    border-radius:14px;
-    box-shadow:0 10px 30px rgba(0,0,0,.08);
-    padding:30px;
-}
+     body {
+         background: #f4f6f8;
+         direction: rtl;
+         padding: 40px;
+     }
 
-.stats {
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-    gap:15px;
-    margin:25px 0;
-}
+     .box {
+         max-width: 900px;
+         margin: auto;
+         background: #fff;
+         border-radius: 14px;
+         box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+         padding: 30px;
+     }
 
-.stat {
-    padding:15px;
-    border-radius:10px;
-    text-align:center;
-    background:#f9fafb;
-}
+     .stats {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+         gap: 15px;
+         margin: 25px 0;
+     }
 
-.timeline {
-    background:#0f172a;
-    color:#e5e7eb;
-    padding:20px;
-    border-radius:12px;
-    font-family: Consolas, monospace;
-    font-size:13px;
-    white-space:pre-line;
-    line-height:1.9;
-}
+     .stat {
+         padding: 15px;
+         border-radius: 10px;
+         text-align: center;
+         background: #f9fafb;
+     }
 
-/* ✅ فاصله بین خطوط متن سایزبندی */
-.size-guide {
-    margin-top:15px;
-    padding:12px;
-    background:#f8fafc;
-    border-radius:10px;
-    line-height:1.9;
-}
+     .timeline {
+         background: #0f172a;
+         color: #e5e7eb;
+         padding: 20px;
+         border-radius: 12px;
+         font-family: Consolas, monospace;
+         font-size: 13px;
+         white-space: pre-line;
+         line-height: 1.9;
+     }
 
-.size-guide br {
-    display:block;
-    margin-bottom:6px;
-}
+     /* ✅ فاصله بین خطوط متن سایزبندی */
+     .size-guide {
+         margin-top: 15px;
+         padding: 12px;
+         background: #f8fafc;
+         border-radius: 10px;
+         line-height: 1.9;
+     }
 
-.size-guide strong {
-    display:block;
-    margin-bottom:8px;
-}
+     .size-guide br {
+         display: block;
+         margin-bottom: 6px;
+     }
 
-.size-guide small {
-    display:block;
-    margin-top:8px;
-    color:#64748b;
-}
-</style>
-</head>
+     .size-guide strong {
+         display: block;
+         margin-bottom: 8px;
+     }
 
-<body>
-<div class="box">
+     .size-guide small {
+         display: block;
+         margin-top: 8px;
+         color: #64748b;
+     }
+     </style>
+ </head>
 
-<h2>📦 گزارش اجرای بروزرسانی محصولات</h2>
+ <body>
+     <div class="box">
 
-⏱ مدت اجرا: <strong><?php echo esc_html($duration); ?> ثانیه</strong><br>
-📅 تاریخ اجرا: <?php echo esc_html(date('Y-m-d H:i:s')); ?>
+         <h2>📦 گزارش اجرای بروزرسانی محصولات</h2>
 
-<div class="stats">
-    <div class="stat">کل: <?php echo $stats['total']; ?></div>
-    <div class="stat">✅ موفق: <?php echo $stats['updated']; ?></div>
-    <div class="stat">⚠️ اسکیپ: <?php echo $stats['skipped']; ?></div>
-    <div class="stat">❌ خطا: <?php echo $stats['errors']; ?></div>
-</div>
+         ⏱ مدت اجرا: <strong><?php echo esc_html($duration); ?> ثانیه</strong><br>
+         📅 تاریخ اجرا: <?php echo esc_html(date('Y-m-d H:i:s')); ?>
 
-<div class="timeline"><?php echo esc_html(implode("\n", $timeline)); ?></div>
+         <div class="stats">
+             <div class="stat">کل: <?php echo $stats['total']; ?></div>
+             <div class="stat">✅ موفق: <?php echo $stats['updated']; ?></div>
+             <div class="stat">⚠️ اسکیپ: <?php echo $stats['skipped']; ?></div>
+             <div class="stat">❌ خطا: <?php echo $stats['errors']; ?></div>
+         </div>
 
-</div>
-</body>
-</html>
-<?php
+         <div class="timeline"><?php echo esc_html(implode("\n", $timeline)); ?></div>
+
+     </div>
+ </body>
+
+ </html>
+ <?php
 exit;
 }
