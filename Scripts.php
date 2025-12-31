@@ -16,12 +16,20 @@ function run_update_products_with_report() {
     // 🔹 محصولات
     // $product_ids = [7037, 7101];
 // دریافت لیست تمام آی‌دی‌های محصولات منتشر شده
+   if (!current_user_can('manage_options')) {
+        wp_die('Access denied');
+    }
+
+    set_time_limit(0); // افزایش زمان اجرا برای تعداد بالای محصولات
+
     $product_ids = get_posts([
-    'post_type'      => 'product',
-    'post_status'    => 'publish',
-    'fields'         => 'ids',
-    'posts_per_page' => -1, // دریافت همه موارد بدون محدودیت تعداد
-]);
+        'post_type'      => 'product',
+        'post_status'    => 'publish',
+        'fields'         => 'ids',
+        'posts_per_page' => -1,
+    ]);
+
+    $start_time = microtime(true);
     // 🔑 مپ تصویر → متن
     $size_text_map = [
 
