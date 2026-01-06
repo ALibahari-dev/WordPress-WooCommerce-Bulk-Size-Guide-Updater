@@ -1,37 +1,15 @@
 <?php
-
-/*📄 داکیومنت فنی (Documentation)
-عنوان پروژه: ابزار انتقال خودکار تصاویر توضیحات کوتاه به گالری ووکامرس
-مسیر دسترسی (Route): https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
-
-۱. توضیحات کلی
-این اسکریپت یک ابزار مدیریتی در پیشخوان وردپرس ایجاد می‌کند که وظیفه آن بررسی «توضیحات کوتاه» (Short Description) محصولات ووکامرس است. اگر تصویری در متن توضیحات یافت شود که قبلاً در «گالری تصاویر» محصول وجود نداشته باشد، اسکریپت به صورت خودکار آن تصویر را به گالری محصول اضافه می‌کند.
-
-۲. ویژگی‌ها
-رابط کاربری اختصاصی (UI): یک صفحه مدرن و واکنش‌گرا (Responsive) با استایل‌دهی اختصاصی.
-حالت تست (Single Test): امکان تست روی یک محصول خاص (پیش‌فرض ID: 7023) جهت بررسی صحت عملکرد.
-پردازش انبوه (Bulk Process): قابلیت اجرا روی تمامی محصولات منتشر شده با لغو محدودیت زمانی سرور (set_time_limit(0)) و بهینه‌سازی کش.
-گزارش‌دهی (Logging): نمایش گزارش لحظه‌ای از عملیات، شامل تعداد تصاویر اضافه شده و محصولات بروزرسانی شده.
-هوشمندی در یافتن: جستجوی تصاویر بر اساس نام فایل (Filename) به جای URL کامل که باعث پایداری بالاتر می‌شود.
-۳. نحوه نصب و اجرا
-کدهای زیر را در فایل functions.php قالب فرزند (Child Theme) یا در یک پلاگین اختصاصی قرار دهید.
-وارد پیشخوان وردپرس شوید.
-آدرس زیر را در مرورگر وارد کنید:
-https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
-یکی از دکمه‌ها را برای شروع انتخاب کنید.
-۴. نکات فنی
-امنیت: استفاده از Nonce برای جلوگیری از درخواست‌های جعلی (CSRF) و بررسی سطح دسترسی manage_options.
-پرفورمنس: در حالت "همه محصولات"، از تابع wp_suspend_cache_invalidation(true) استفاده شده تا سرعت پردازش بالا برود.
-ریفرش صفحه: پس از زدن دکمه، صفحه رفرش شده و نتیجه در کادر "گزارش عملیات" نمایش داده می‌شود (مشکل صفحه سفید قبلی رفع شده است).
-
-*/
-
-add_action('admin_post_test_shortdesc_images_6945', function () {
+/**
+ * Plugin Name: SD Image to Gallery Tool
+ * Plugin URI:  https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
+ * Description: ابزار انتقال خودکار تصاویر توضیحات کوتاه به گالری ووکامرس (نسخه اصلاح شده GUID).
+ * Version:     1.2.0
+ * Author:      Nora Dev
+ * Text Domain: sd-gallery-tool
+ */
 
 /**
- * 
- Rute : https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
-افزودن منو به پیشخوان وردپرس
+ * افزودن منو به پیشخوان وردپرس
  */
 add_action('admin_menu', 'sd_add_admin_menu');
 function sd_add_admin_menu() {
@@ -221,9 +199,12 @@ function sd_render_admin_page() {
 }
 
 /**
- * تابع اصلی پردازش محصولات (منطق اسکریپت شما)
+ * تابع اصلی پردازش محصولات (نسخه اصلاح شده با جستجو در GUID)
+ * این نسخه برای حل مشکل فایل‌هایی که نامش در عنوان (Title) تغییر کرده است، جستجو در URL انجام می‌دهد.
  */
 function sd_process_products($product_ids) {
+    global $wpdb; // دسترسی به دیتابیس برای جستجوی دقیق
+
     echo '<div style="direction: rtl; font-family: Tahoma, sans-serif;">';
     echo '<h3>گزارش عملیات:</h3><hr>';
 
@@ -239,12 +220,12 @@ function sd_process_products($product_ids) {
 
         $short_desc = $product->get_short_description();
         if (empty($short_desc)) {
-            // نادیده گرفتن محصولات بدون توضیحات کوتاه برای تمیزی خروجی
             continue;
         }
 
-        // پیدا کردن تصاویر در متن
-        preg_match_all('/<img[^>]+src="([^"]+)"/i', $short_desc, $matches);
+        // Regex جدید: پشتیبانی از src="..." و src='...'
+        preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $short_desc, $matches);
+        
         if (empty($matches[1])) {
             continue;
         }
@@ -255,23 +236,56 @@ function sd_process_products($product_ids) {
 
         foreach ($matches[1] as $img_url) {
             $filename = basename(parse_url($img_url, PHP_URL_PATH));
+            $path_info = pathinfo($filename);
+            $name_only = isset($path_info['filename']) ? sanitize_title($path_info['filename']) : sanitize_title($filename);
+            
+            $att_id = null;
 
-            // جستجو بدون محدودیت allowed_images
+            // --- روش 1: جستجو با Slug دقیق (سریع) ---
             $attachment = get_posts([
                 'post_type'      => 'attachment',
-                'name'           => sanitize_title(pathinfo($filename, PATHINFO_FILENAME)),
+                'name'           => sanitize_title($filename),
                 'posts_per_page' => 1,
                 'post_status'    => 'inherit',
                 'suppress_filters' => false,
             ]);
 
-            if (!$attachment) {
+            if ($attachment) {
+                $att_id = $attachment[0]->ID;
+            }
+
+            // --- روش 2: جستجو با Slug بدون پسوند (Fallback) ---
+            if (!$att_id) {
+                $attachment = get_posts([
+                    'post_type'      => 'attachment',
+                    'name'           => $name_only,
+                    'posts_per_page' => 1,
+                    'post_status'    => 'inherit',
+                    'suppress_filters' => false,
+                ]);
+                if ($attachment) {
+                    $att_id = $attachment[0]->ID;
+                }
+            }
+
+            // --- روش 3: جستجوی قدرتمند در آدرس فایل (GUID) ---
+            // این روش مشکلی مثل اختلاف نام فایل و عنوان را حل می‌کند
+            // مثلا اگر فایل 6-months-1.webp است اما عنوانش 6-months است
+            if (!$att_id) {
+                // جستجوی مستقیم در دیتابیس برای نام فایل در ستون guid
+                $att_id = $wpdb->get_var( $wpdb->prepare( 
+                    "SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND guid LIKE %s LIMIT 1", 
+                    '%' . $wpdb->esc_like($filename) . '%' 
+                ) );
+            }
+
+            // اگر همه روش‌ها شکست خوردند
+            if (!$att_id) {
                 $not_found[] = $filename;
                 continue;
             }
 
-            $att_id = $attachment[0]->ID;
-
+            // اگر عکس قبلاً در گالری نبود، اضافه کن
             if (!in_array($att_id, $gallery)) {
                 $gallery[] = $att_id;
                 $added[] = $filename;
@@ -286,12 +300,19 @@ function sd_process_products($product_ids) {
             $counter++;
         }
         
-        // لاگ خطاها (اختیاری)
-        /*
+        // نمایش لیست عکس‌هایی که پیدا نشدند (برای بررسی)
         if (!empty($not_found)) {
-            echo "<span class='error'>⚠️ محصول ID $product_id:</span> " . count($not_found) . " تصویر پیدا نشد.<br>";
+            echo "<div style='margin-top:5px; padding:5px; background:#fff3cd; border-radius:3px;'>";
+            echo "<span class='warning'>⚠️ محصول ID $product_id:</span> " . count($not_found) . " عکس پیدا نشد:<br>";
+            echo "<ul style='font-size:11px; color:#555; margin-right:20px;'>";
+            foreach (array_slice($not_found, 0, 5) as $miss_file) {
+                echo "<li>$miss_file</li>";
+            }
+            if (count($not_found) > 5) {
+                echo "<li>... و " . (count($not_found) - 5) . " مورد دیگر.</li>";
+            }
+            echo "</ul></div>";
         }
-        */
     }
 
     echo '<hr>';
