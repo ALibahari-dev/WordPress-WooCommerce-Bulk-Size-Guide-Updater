@@ -1,12 +1,47 @@
-<?php
+
 /**
- * Plugin Name: SD Image to Gallery Tool
- * Plugin URI:  https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
- * Description: ابزار انتقال خودکار تصاویر توضیحات کوتاه به گالری ووکامرس (نسخه اصلاح شده GUID).
- * Version:     1.2.0
- * Author:      ALi Bahari Dev
- * Text Domain: sd-gallery-tool
+ * ابزار انتقال تصاویر توضیحات به گالری (نسخه با جستجوی آژاکس)
+ * 
+ * 📍 Route (لینک دسترسی):
+ * https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
  */
+
+// ----------------------------------------------------
+// هندلر جستجوی آژاکس برای محصولات
+// ----------------------------------------------------
+add_action('wp_ajax_sd_search_products', 'sd_handle_product_search');
+add_action('wp_ajax_nopriv_sd_search_products', 'sd_handle_product_search'); // فقط برای اطمینان، در ادمین لازم نیست ولی خوب است
+
+function sd_handle_product_search() {
+    // بررسی امنیتی
+    check_ajax_referer('sd_search_nonce', 'security');
+
+    $term = sanitize_text_field($_POST['term']);
+    
+    if (empty($term)) {
+        wp_send_json_error();
+    }
+
+    // جستجو در دیتابیس برای محصولات
+    $args = [
+        'post_type'      => 'product',
+        'posts_per_page' => 10,
+        's'              => $term, // جستجو بر اساس عنوان و محتوا
+        'post_status'    => 'publish',
+    ];
+
+    $products = get_posts($args);
+    $results = [];
+
+    foreach ($products as $product) {
+        $results[] = [
+            'id'    => $product->ID,
+            'title' => $product->post_title,
+        ];
+    }
+
+    wp_send_json_success($results);
+}
 
 /**
  * افزودن منو به پیشخوان وردپرس
@@ -52,9 +87,16 @@ function sd_render_admin_page() {
 
         // ---------------- انتخاب نوع عملیات ----------------
 
-        // حالت 1: تست روی یک محصول خاص (ID 7023)
+        // حالت 1: تست روی یک محصول خاص (انتخابی توسط کاربر)
         if ($action === 'single') {
-            $product_ids = [7023]; 
+            // دریافت آیدی از اینپوت
+            $custom_id = isset($_POST['custom_product_id']) ? intval($_POST['custom_product_id']) : 0;
+
+            if ($custom_id > 0) {
+                $product_ids = [$custom_id];
+            } else {
+                echo '<div class="error" style="padding:10px; background:#ffe6e6; border:1px solid red; margin-bottom:10px;">❌ لطفاً یک شناسه محصول (ID) معتبر انتخاب کنید.</div>';
+            }
         }
         // حالت 2: اجرا روی همه محصولات
         elseif ($action === 'all') {
@@ -115,6 +157,59 @@ function sd_render_admin_page() {
             margin-top: 20px;
             flex-wrap: wrap;
         }
+        .sd-test-box {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px dashed #ccc;
+            position: relative; /* برای پوزیشن آژاکس */
+        }
+        .sd-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .sd-input-group input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 300px; /* بزرگتر برای تایپ نام */
+            font-family: Tahoma, sans-serif;
+            font-size: 14px;
+        }
+        .sd-input-group input:focus {
+            border-color: #2271b1;
+            outline: none;
+        }
+        /* استایل لیست آژاکس */
+        .sd-search-results {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-top: none;
+            width: 300px; /* همان عرض اینپوت */
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 9999;
+            display: none; /* پیش‌فرض مخفی */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .sd-result-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+        .sd-result-item:hover {
+            background-color: #f0f0f0;
+        }
+        .sd-result-id {
+            color: #888;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        
         .sd-btn {
             padding: 12px 25px;
             border: none;
@@ -151,12 +246,83 @@ function sd_render_admin_page() {
             font-family: monospace;
             font-size: 13px;
             white-space: pre-wrap;
-            display: none; /* به صورت پیش‌فرض مخفی */
+            display: none;
         }
         .success { color: #00a32a; font-weight: bold; }
         .error { color: #d63638; font-weight: bold; }
         .warning { color: #dba617; }
     </style>
+
+    <!-- جاوااسکریپت برای آژاکس -->
+    <script>
+        jQuery(document).ready(function($) {
+            var searchRequest;
+            
+            // وقتی روی اینپوت تایپ می‌شود
+            $('#sd_product_search').on('input', function() {
+                var term = $(this).val();
+                var $resultsBox = $('#sd_search_results');
+
+                // اگر متن کوتاه بود، نتیجه را پاک کن
+                if (term.length < 2) {
+                    $resultsBox.hide().empty();
+                    return;
+                }
+
+                // لغو درخواست قبلی اگر وجود داشته باشد (برای جلوگیری از تداخل)
+                if (searchRequest) {
+                    searchRequest.abort();
+                }
+
+                // ارسال درخواست آژاکس
+                searchRequest = $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'sd_search_products',
+                        security: '<?php echo wp_create_nonce('sd_search_nonce'); ?>',
+                        term: term
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $resultsBox.empty();
+                            if (response.data.length > 0) {
+                                $.each(response.data, function(index, item) {
+                                    $resultsBox.append(
+                                        '<div class="sd-result-item" data-id="' + item.id + '">' + 
+                                            '<span class="sd-result-id">(' + item.id + ')</span> ' + item.title + 
+                                        '</div>'
+                                    );
+                                });
+                                $resultsBox.show();
+                            } else {
+                                $resultsBox.hide();
+                            }
+                        }
+                    }
+                });
+            });
+
+            // وقتی روی یکی از نتایج کلیک می‌شود
+            $(document).on('click', '.sd-result-item', function() {
+                var id = $(this).data('id');
+                var text = $(this).text();
+                
+                // مقدار اینپوت را برابر ID قرار بده
+                $('#sd_product_search').val(id);
+                
+                // لیست را مخفی کن
+                $('#sd_search_results').hide();
+            });
+
+            // مخفی کردن لیست وقتی بیرون کلیک شد
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.sd-test-box').length) {
+                    $('#sd_search_results').hide();
+                }
+            });
+        });
+    </script>
 
     <div class="sd-wrapper">
         <div class="sd-header">
@@ -164,9 +330,16 @@ function sd_render_admin_page() {
             <p>این ابزار تصاویر موجود در «توضیحات کوتاه» محصول را اسکرول کرده و اگر در گالری نباشند، اضافه می‌کند.</p>
         </div>
 
+        <!-- نمایش لینک روت در صفحه -->
+        <div style="background:#e7f3ff; padding:15px; border-radius:5px; margin-bottom:20px; border:1px solid #b3d7ff;">
+            <strong style="color:#0d47a1;">🔗 لینک دسترسی به ابزار:</strong><br>
+            <a href="https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool" target="_blank" style="color:#0d47a1; font-family: monospace;">
+                https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
+            </a>
+        </div>
+
         <div class="sd-card">
-            <h3>📋 وضعیت و تنظیمات:</h3>
-            <p>لطفاً یکی از گزینه‌های زیر را برای شروع انتخاب کنید.</p>
+            <h3>📋 اجرای دستی و انبوه:</h3>
             
             <form id="sdForm" method="post">
                 <?php wp_nonce_field('sd_process_action', 'sd_nonce'); ?>
@@ -176,11 +349,23 @@ function sd_render_admin_page() {
                     <button type="submit" name="sd_action" value="all" class="sd-btn sd-btn-primary" onclick="return confirm('آیا مطمئن هستید؟ این عملیات ممکن است زمان‌بر باشد.')">
                         🚀 اجرا روی همه محصولات
                     </button>
+                </div>
 
-                    <!-- دکمه تست روی یک آیدی خاص -->
-                    <button type="submit" name="sd_action" value="single" class="sd-btn sd-btn-danger">
-                        🧪 تست روی محصول ID: 7023
-                    </button>
+                <!-- بخش انتخاب محصول برای تست (با آژاکس) -->
+                <div class="sd-test-box">
+                    <h4 style="margin:0 0 10px 0; color:#555;">🧪 تست روی محصول خاص:</h4>
+                    <p style="font-size:12px; color:#666; margin-bottom:5px;">نام محصول یا آیدی را وارد کنید و از لیست انتخاب کنید:</p>
+                    
+                    <div class="sd-input-group">
+                        <input type="text" id="sd_product_search" name="custom_product_id" placeholder="جستجوی محصول (مثلا: تیشرت)" required>
+                        
+                        <!-- کانتینر نتایج جستجو -->
+                        <div id="sd_search_results" class="sd-search-results"></div>
+
+                        <button type="submit" name="sd_action" value="single" class="sd-btn sd-btn-danger">
+                            اجرا روی این محصول
+                        </button>
+                    </div>
                 </div>
             </form>
             
@@ -190,7 +375,6 @@ function sd_render_admin_page() {
         </div>
 
         <!-- بخش لاگ خروجی -->
-        <!-- اگر متغیر show_log true باشد، باکس را نمایش بده -->
         <div id="logOutput" class="sd-log" <?php echo $show_log ? 'style="display:block;"' : ''; ?>>
             <?php echo $log_output; ?>
         </div>
@@ -200,10 +384,9 @@ function sd_render_admin_page() {
 
 /**
  * تابع اصلی پردازش محصولات (نسخه اصلاح شده با جستجو در GUID)
- * این نسخه برای حل مشکل فایل‌هایی که نامش در عنوان (Title) تغییر کرده است، جستجو در URL انجام می‌دهد.
  */
 function sd_process_products($product_ids) {
-    global $wpdb; // دسترسی به دیتابیس برای جستجوی دقیق
+    global $wpdb; 
 
     echo '<div style="direction: rtl; font-family: Tahoma, sans-serif;">';
     echo '<h3>گزارش عملیات:</h3><hr>';
@@ -223,7 +406,6 @@ function sd_process_products($product_ids) {
             continue;
         }
 
-        // Regex جدید: پشتیبانی از src="..." و src='...'
         preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $short_desc, $matches);
         
         if (empty($matches[1])) {
@@ -241,7 +423,7 @@ function sd_process_products($product_ids) {
             
             $att_id = null;
 
-            // --- روش 1: جستجو با Slug دقیق (سریع) ---
+            // روش 1: جستجو با Slug دقیق
             $attachment = get_posts([
                 'post_type'      => 'attachment',
                 'name'           => sanitize_title($filename),
@@ -254,7 +436,7 @@ function sd_process_products($product_ids) {
                 $att_id = $attachment[0]->ID;
             }
 
-            // --- روش 2: جستجو با Slug بدون پسوند (Fallback) ---
+            // روش 2: جستجو با Slug بدون پسوند
             if (!$att_id) {
                 $attachment = get_posts([
                     'post_type'      => 'attachment',
@@ -268,31 +450,25 @@ function sd_process_products($product_ids) {
                 }
             }
 
-            // --- روش 3: جستجوی قدرتمند در آدرس فایل (GUID) ---
-            // این روش مشکلی مثل اختلاف نام فایل و عنوان را حل می‌کند
-            // مثلا اگر فایل 6-months-1.webp است اما عنوانش 6-months است
+            // روش 3: جستجوی در GUID
             if (!$att_id) {
-                // جستجوی مستقیم در دیتابیس برای نام فایل در ستون guid
                 $att_id = $wpdb->get_var( $wpdb->prepare( 
                     "SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND guid LIKE %s LIMIT 1", 
                     '%' . $wpdb->esc_like($filename) . '%' 
                 ) );
             }
 
-            // اگر همه روش‌ها شکست خوردند
             if (!$att_id) {
                 $not_found[] = $filename;
                 continue;
             }
 
-            // اگر عکس قبلاً در گالری نبود، اضافه کن
             if (!in_array($att_id, $gallery)) {
                 $gallery[] = $att_id;
                 $added[] = $filename;
             }
         }
 
-        // ذخیره تغییرات
         if (!empty($added)) {
             $product->set_gallery_image_ids($gallery);
             $product->save();
@@ -300,7 +476,6 @@ function sd_process_products($product_ids) {
             $counter++;
         }
         
-        // نمایش لیست عکس‌هایی که پیدا نشدند (برای بررسی)
         if (!empty($not_found)) {
             echo "<div style='margin-top:5px; padding:5px; background:#fff3cd; border-radius:3px;'>";
             echo "<span class='warning'>⚠️ محصول ID $product_id:</span> " . count($not_found) . " عکس پیدا نشد:<br>";
