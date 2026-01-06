@@ -4,7 +4,7 @@
  * Plugin URI:  https://noraste.com/wp-admin/admin.php?page=shortdesc_gallery_tool
  * Description: ابزار انتقال خودکار تصاویر توضیحات کوتاه به گالری ووکامرس (نسخه اصلاح شده GUID).
  * Version:     1.2.0
- * Author:      Nora Dev
+ * Author:      ALi Bahari Dev
  * Text Domain: sd-gallery-tool
  */
 
